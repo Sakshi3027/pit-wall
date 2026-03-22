@@ -648,10 +648,12 @@ elif page == "Race Predictor":
             dh  = feat_df[feat_df["driver"] == driver]
             row = dh.iloc[-1][FEATURES].to_dict() if len(dh) > 0 else {f: 0.0 for f in FEATURES}
             row.update({
-                "driver": driver, "grid": grids[driver],
+                "driver": driver,
+                "grid": grids[driver],
                 "grid_squared": grids[driver] ** 2,
                 "circuit_type_code": circuit_code,
-                "round": round_num, "year": season_year,
+                "round": round_num,
+                "year": season_year,
             })
             rows.append(row)
 
@@ -684,18 +686,20 @@ elif page == "Race Predictor":
         <div style="background:#111;border:1px solid #1e1e1e;border-left:3px solid #7c4dff;
                     border-radius:10px;padding:0.8rem 1.2rem;margin-bottom:1rem;">
             <div style="color:#aaa;font-size:0.82rem;">
-                SHAP values show exactly which factors pushed each driver's podium probability
-                up or down. Positive = helped, Negative = hurt.
+                SHAP values show which features pushed each driver's podium probability
+                up (green) or down (red). Bigger bar = bigger impact on the prediction.
             </div>
         </div>
         """, unsafe_allow_html=True)
 
         try:
-            shap_df   = get_shap_explanation(model, pd.DataFrame(rows), FEATURES)
-            top_driver = predictions.iloc[0]["driver"]
             explain_driver = st.selectbox(
-                "Explain prediction for:", predictions["driver"].tolist()
+                "Explain prediction for driver:",
+                predictions["driver"].tolist(),
+                key="shap_driver"
             )
+
+            shap_df = get_shap_explanation(model, pd.DataFrame(rows), FEATURES)
             factors = get_top_factors(shap_df, explain_driver, top_n=6)
 
             fig_shap = go.Figure()
@@ -715,40 +719,43 @@ elif page == "Race Predictor":
             fig_shap.update_layout(
                 plot_bgcolor="rgba(0,0,0,0)",
                 paper_bgcolor="rgba(0,0,0,0)",
-                height=300,
+                height=320,
                 xaxis=dict(
-                    gridcolor="#1e1e1e", zeroline=True,
-                    zerolinecolor="#333", zerolinewidth=1,
-                    title="SHAP value (impact on podium probability)",
+                    gridcolor="#1e1e1e",
+                    zeroline=True, zerolinecolor="#333", zerolinewidth=1,
+                    title="Impact on podium probability",
                     tickfont=dict(color="#666"),
                 ),
                 yaxis=dict(tickfont=dict(color="#aaa")),
                 font=dict(color="#888"),
-                margin=dict(l=120),
+                margin=dict(l=140, r=80),
             )
             st.plotly_chart(fig_shap, use_container_width=True)
 
-            # Plain language explanation
+            # Plain language summary
             pos = factors[factors["shap_value"] > 0]
             neg = factors[factors["shap_value"] < 0]
-            pos_str = ", ".join([f"**{r['feature']}** (+{r['shap_value']:.3f})"
-                                  for _, r in pos.head(3).iterrows()])
-            neg_str = ", ".join([f"**{r['feature']}** ({r['shap_value']:.3f})"
-                                  for _, r in neg.head(2).iterrows()])
-            st.markdown(f"""
-            <div style="background:#111;border:1px solid #1e1e1e;
-                        border-radius:10px;padding:1rem 1.2rem;margin-top:0.5rem;">
-                <div style="color:#fff;font-size:0.85rem;font-weight:600;margin-bottom:6px;">
-                    {explain_driver} — model reasoning
-                </div>
-                <div style="color:#aaa;font-size:0.82rem;line-height:1.6;">
-                    {'Helped by: ' + pos_str if pos_str else ''}
-                    {'<br>Hurt by: ' + neg_str if neg_str else ''}
-                </div>
-            </div>
-            """, unsafe_allow_html=True)
+            helped = ", ".join([f"{r['feature']} (+{r['shap_value']:.3f})" for _, r in pos.head(3).iterrows()])
+            hurt   = ", ".join([f"{r['feature']} ({r['shap_value']:.3f})" for _, r in neg.head(2).iterrows()])
+            reasoning = ""
+            if helped:
+                reasoning += f"<b style='color:#aaa'>Helped by:</b> <span style='color:#00d4aa'>{helped}</span>"
+            if hurt:
+                reasoning += f"<br><b style='color:#aaa'>Hurt by:</b> <span style='color:#e10600'>{hurt}</span>"
+            st.markdown(
+                f"<div style='background:#111;border:1px solid #1e1e1e;border-radius:10px;"
+                f"padding:1rem 1.2rem;margin-top:0.5rem;'>"
+                f"<div style='color:#fff;font-size:0.85rem;font-weight:600;margin-bottom:6px;'>"
+                f"{explain_driver} — model reasoning</div>"
+                f"<div style='color:#aaa;font-size:0.82rem;line-height:1.7;'>{reasoning}</div>"
+                f"</div>",
+                unsafe_allow_html=True
+            )
+
         except Exception as e:
             st.info(f"SHAP analysis unavailable: {e}")
+
+       
 
 
 # ── Page: Season Championship ─────────────────────────────────────────────────
@@ -1036,7 +1043,7 @@ elif page == "Driver DNA":
     display_dna = dna[["driver"] + DIMENSIONS].copy()
     display_dna.columns = ["Driver","Street","Power","Technical","High Downforce","Consistency","Race Craft"]
     st.dataframe(display_dna, use_container_width=True, hide_index=True)
-    
+
 # ── Page: AI Race Engineer ────────────────────────────────────────────────────
 elif page == "AI Race Engineer":
     st.markdown('<div class="main-header">AI Race Engineer</div>', unsafe_allow_html=True)

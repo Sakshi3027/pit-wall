@@ -56,9 +56,8 @@ def train_model(historical_df: pd.DataFrame) -> XGBClassifier:
     os.makedirs(os.path.dirname(MODEL_PATH), exist_ok=True)
     with open(MODEL_PATH, "wb") as f:
         pickle.dump(model, f)
-    print(f"Model saved to {MODEL_PATH}")
+    print(f"Model saved — n_features: {model.n_features_in_}")
     return model
-
 
 def load_model() -> XGBClassifier:
     with open(MODEL_PATH, "rb") as f:
@@ -67,18 +66,23 @@ def load_model() -> XGBClassifier:
 def predict_race(model: XGBClassifier,
                  race_features: pd.DataFrame) -> pd.DataFrame:
     df = race_features.copy()
-    df = df.fillna(df.median(numeric_only=True))
-    probs = model.predict_proba(df[FEATURES].values)[:, 1]
+    df = df.fillna(0)
+    n = model.n_features_in_
+    X = df[FEATURES].values
+    if X.shape[1] < n:
+        X = np.hstack([X, np.zeros((X.shape[0], n - X.shape[1]))])
+    elif X.shape[1] > n:
+        X = X[:, :n]
+    probs = model.predict_proba(X)[:, 1]
     df["podium_probability"] = probs
     df = df.sort_values("podium_probability", ascending=False)
     df["predicted_position"] = range(1, len(df) + 1)
-    return df[["driver", "podium_probability",
-               "predicted_position"] + FEATURES].reset_index(drop=True)
+    return df[["driver","podium_probability","predicted_position"] + FEATURES].reset_index(drop=True)
 
 def get_feature_importance(model: XGBClassifier) -> pd.DataFrame:
     importance = model.feature_importances_
-    feature_names = [f"f{i}" for i in range(len(importance))]
+    n = min(len(importance), len(FEATURES))
     return pd.DataFrame({
-        "feature": feature_names,
-        "importance": importance
+        "feature": FEATURES[:n],
+        "importance": importance[:n]
     }).sort_values("importance", ascending=False).reset_index(drop=True)
