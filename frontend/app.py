@@ -4,8 +4,6 @@ import plotly.express as px
 import plotly.graph_objects as go
 import sys, os
 from dotenv import load_dotenv
-from app.models.driver_dna import build_driver_dna
-from app.models.explainability import get_shap_explanation, get_top_factors
 
 load_dotenv()
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
@@ -18,6 +16,8 @@ from app.data.ergast_client import (
 from app.data.fastf1_client import get_lap_times, get_race_results
 from app.models.race_predictor import train_model, load_model
 from app.models.season_simulator import simulate_season, build_driver_strengths
+from app.models.driver_dna import build_driver_dna
+from app.models.explainability import get_shap_explanation, get_top_factors
 
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
 if GEMINI_API_KEY:
@@ -677,7 +677,7 @@ elif page == "Race Predictor":
             predictions[["driver","podium_probability","predicted_position"]].head(10),
             use_container_width=True, hide_index=True
         )
-        
+
         # SHAP Explainability
         section_header("Why did the model predict this?", color="#7c4dff")
         st.markdown("""
@@ -935,9 +935,12 @@ elif page == "Driver DNA":
         dna  = build_driver_dna(hist)
 
     DIMENSIONS = ["street","power","technical","high_downforce","consistency","race_craft"]
-    DIM_LABELS  = ["Street","Power","Technical","High\nDownforce","Consistency","Race\nCraft"]
+    DIM_LABELS  = ["Street","Power","Technical","High Downforce","Consistency","Race Craft"]
+    dim_icons   = {"street":"🏙️","power":"⚡","technical":"🔧",
+                   "high_downforce":"🌀","consistency":"📊","race_craft":"🎯"}
+    colors      = ["#e10600","#00d4aa","#7c4dff","#ff8c00","#00b0ff",
+                   "#ff4081","#69f0ae","#ffeb3b","#40c4ff","#ff6d00"]
 
-    # Driver comparison selector
     section_header("Compare Drivers", color="#7c4dff")
     available = dna["driver"].tolist()
     defaults  = [d for d in ["VER","NOR","LEC","RUS","HAM"] if d in available][:5]
@@ -946,16 +949,12 @@ elif page == "Driver DNA":
     if selected:
         # Radar chart
         fig = go.Figure()
-        colors = ["#e10600","#00d4aa","#7c4dff","#ff8c00","#00b0ff",
-                  "#ff4081","#69f0ae","#ffeb3b","#40c4ff","#ff6d00"]
-
         for i, driver in enumerate(selected):
-            row    = dna[dna["driver"] == driver]
+            row = dna[dna["driver"] == driver]
             if row.empty:
                 continue
             values = [float(row[d].iloc[0]) for d in DIMENSIONS]
-            values.append(values[0])  # close the polygon
-
+            values.append(values[0])
             fig.add_trace(go.Scatterpolar(
                 r=values,
                 theta=DIM_LABELS + [DIM_LABELS[0]],
@@ -990,62 +989,54 @@ elif page == "Driver DNA":
         )
         st.plotly_chart(fig, use_container_width=True)
 
-        # Individual scorecards
+        # Individual scorecards — built per driver separately
         section_header("Driver Scorecards", color="#7c4dff")
         cols = st.columns(len(selected))
-        dim_icons = {"street":"🏙️","power":"⚡","technical":"🔧",
-                     "high_downforce":"🌀","consistency":"📊","race_craft":"🎯"}
 
         for i, driver in enumerate(selected):
             row = dna[dna["driver"] == driver]
             if row.empty:
                 continue
             with cols[i]:
-                best_dim = max(DIMENSIONS, key=lambda d: float(row[d].iloc[0]))
+                color     = colors[i % len(colors)]
+                best_dim  = max(DIMENSIONS, key=lambda d: float(row[d].iloc[0]))
                 worst_dim = min(DIMENSIONS, key=lambda d: float(row[d].iloc[0]))
-                st.markdown(f"""
-                <div style="background:#111;border:1px solid #1e1e1e;
-                            border-top:3px solid {colors[i % len(colors)]};
-                            border-radius:10px;padding:12px 14px;">
-                    <div style="font-size:1rem;font-weight:800;color:#fff;
-                                margin-bottom:10px;">{driver}</div>
-                    {"".join([f'''
-                    <div style="display:flex;justify-content:space-between;
-                                align-items:center;margin-bottom:6px;">
-                        <span style="color:#666;font-size:0.72rem;">
-                            {dim_icons.get(d,"")}&nbsp;{d.replace("_"," ").title()}
-                        </span>
+
+                # Build card HTML piece by piece
+                card = f'<div style="background:#111;border:1px solid #1e1e1e;border-top:3px solid {color};border-radius:10px;padding:12px 14px;">'
+                card += f'<div style="font-size:1rem;font-weight:800;color:#fff;margin-bottom:10px;">{driver}</div>'
+
+                for d in DIMENSIONS:
+                    val  = float(row[d].iloc[0])
+                    icon = dim_icons.get(d, "")
+                    label = d.replace("_", " ").title()
+                    card += f'''
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+                        <span style="color:#666;font-size:0.72rem;">{icon} {label}</span>
                         <div style="display:flex;align-items:center;gap:6px;">
                             <div style="width:60px;height:4px;background:#1e1e1e;border-radius:2px;">
-                                <div style="width:{float(row[d].iloc[0])}%;height:100%;
-                                            background:{colors[i % len(colors)]};
-                                            border-radius:2px;opacity:0.8;"></div>
+                                <div style="width:{val}%;height:100%;background:{color};border-radius:2px;opacity:0.8;"></div>
                             </div>
-                            <span style="color:#aaa;font-size:0.72rem;min-width:28px;
-                                         text-align:right;">{float(row[d].iloc[0]):.0f}</span>
+                            <span style="color:#aaa;font-size:0.72rem;min-width:28px;text-align:right;">{val:.0f}</span>
                         </div>
-                    </div>
-                    ''' for d in DIMENSIONS])}
+                    </div>'''
+
+                card += f'''
                     <div style="margin-top:10px;padding-top:8px;border-top:1px solid #1e1e1e;">
-                        <div style="color:#555;font-size:0.65rem;text-transform:uppercase;
-                                    letter-spacing:1px;margin-bottom:4px;">Strengths</div>
-                        <div style="color:#00d4aa;font-size:0.78rem;font-weight:600;">
-                            ↑ {best_dim.replace("_"," ").title()}
-                        </div>
-                        <div style="color:#e10600;font-size:0.78rem;font-weight:600;margin-top:2px;">
-                            ↓ {worst_dim.replace("_"," ").title()}
-                        </div>
+                        <div style="color:#555;font-size:0.65rem;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">Profile</div>
+                        <div style="color:#00d4aa;font-size:0.78rem;font-weight:600;">↑ {best_dim.replace("_"," ").title()}</div>
+                        <div style="color:#e10600;font-size:0.78rem;font-weight:600;margin-top:2px;">↓ {worst_dim.replace("_"," ").title()}</div>
                     </div>
-                </div>
-                """, unsafe_allow_html=True)
+                </div>'''
+
+                st.markdown(card, unsafe_allow_html=True)
 
     # Full DNA table
     section_header("All Drivers", color="#555")
     display_dna = dna[["driver"] + DIMENSIONS].copy()
     display_dna.columns = ["Driver","Street","Power","Technical","High Downforce","Consistency","Race Craft"]
     st.dataframe(display_dna, use_container_width=True, hide_index=True)
-
-
+    
 # ── Page: AI Race Engineer ────────────────────────────────────────────────────
 elif page == "AI Race Engineer":
     st.markdown('<div class="main-header">AI Race Engineer</div>', unsafe_allow_html=True)
