@@ -4,6 +4,7 @@ import plotly.express as px
 import plotly.graph_objects as go
 import sys, os
 from dotenv import load_dotenv
+import google.generativeai.types as genai_types
 
 load_dotenv()
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
@@ -279,20 +280,68 @@ Be direct, expert, and insightful. Real analysis only — no waffle.
 
 def get_gemini_response(context: str, messages: list) -> str:
     if not GEMINI_API_KEY:
-        return "⚠️ GEMINI_API_KEY not set. Add it to your .env file."
+        return "⚠️ GEMINI_API_KEY not set."
+
+    from app.utils.f1_tools import TOOL_DEFINITIONS, TOOL_FUNCTIONS
+    import google.generativeai.types as genai_types
+
+    tools = [genai_types.Tool(
+        function_declarations=[
+            genai_types.FunctionDeclaration(
+                name=t["name"],
+                description=t["description"],
+                parameters=t["parameters"],
+            ) for t in TOOL_DEFINITIONS
+        ]
+    )]
+
     model = genai.GenerativeModel(
         model_name="gemini-2.0-flash",
         system_instruction=context,
+        tools=tools,
     )
+
     history = []
     for msg in messages[:-1]:
         history.append({
             "role": "user" if msg["role"] == "user" else "model",
             "parts": [msg["content"]]
         })
-    chat  = model.start_chat(history=history)
-    reply = chat.send_message(messages[-1]["content"])
-    return reply.text
+
+    chat     = model.start_chat(history=history)
+    response = chat.send_message(messages[-1]["content"])
+
+    # Handle function calls
+    max_rounds = 3
+    for _ in range(max_rounds):
+        fn_calls = [p for p in response.parts if hasattr(p, "function_call") and p.function_call.name]
+        if not fn_calls:
+            break
+
+        # Execute all function calls
+        tool_results = []
+        for part in fn_calls:
+            fn   = part.function_call
+            name = fn.name
+            args = dict(fn.args) if fn.args else {}
+            try:
+                result = TOOL_FUNCTIONS[name](args)
+            except Exception as e:
+                result = f"Error calling {name}: {e}"
+            tool_results.append(
+                genai_types.Part(
+                    function_response=genai_types.FunctionResponse(
+                        name=name,
+                        response={"result": result}
+                    )
+                )
+            )
+
+        response = chat.send_message(tool_results)
+
+    # Extract text response
+    text_parts = [p.text for p in response.parts if hasattr(p, "text") and p.text]
+    return "\n".join(text_parts) if text_parts else "I couldn't generate a response."
 
 # ── Sidebar ───────────────────────────────────────────────────────────────────
 with st.sidebar:
