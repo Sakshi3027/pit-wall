@@ -4,6 +4,8 @@ import plotly.express as px
 import plotly.graph_objects as go
 import sys, os
 from dotenv import load_dotenv
+from app.models.driver_dna import build_driver_dna
+from app.models.explainability import get_shap_explanation, get_top_factors
 
 load_dotenv()
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
@@ -312,6 +314,7 @@ with st.sidebar:
         "Race Analysis",
         "Race Predictor",
         "Season Championship",
+        "Driver DNA",
         "AI Race Engineer",
     ])
     st.markdown('<hr style="border-color:#1e1e1e;">', unsafe_allow_html=True)
@@ -674,6 +677,78 @@ elif page == "Race Predictor":
             predictions[["driver","podium_probability","predicted_position"]].head(10),
             use_container_width=True, hide_index=True
         )
+        
+        # SHAP Explainability
+        section_header("Why did the model predict this?", color="#7c4dff")
+        st.markdown("""
+        <div style="background:#111;border:1px solid #1e1e1e;border-left:3px solid #7c4dff;
+                    border-radius:10px;padding:0.8rem 1.2rem;margin-bottom:1rem;">
+            <div style="color:#aaa;font-size:0.82rem;">
+                SHAP values show exactly which factors pushed each driver's podium probability
+                up or down. Positive = helped, Negative = hurt.
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+
+        try:
+            shap_df   = get_shap_explanation(model, pd.DataFrame(rows), FEATURES)
+            top_driver = predictions.iloc[0]["driver"]
+            explain_driver = st.selectbox(
+                "Explain prediction for:", predictions["driver"].tolist()
+            )
+            factors = get_top_factors(shap_df, explain_driver, top_n=6)
+
+            fig_shap = go.Figure()
+            fig_shap.add_trace(go.Bar(
+                x=factors["shap_value"],
+                y=factors["feature"],
+                orientation="h",
+                marker_color=[
+                    "#00d4aa" if v > 0 else "#e10600"
+                    for v in factors["shap_value"]
+                ],
+                text=[f"+{v:.3f}" if v > 0 else f"{v:.3f}"
+                      for v in factors["shap_value"]],
+                textposition="outside",
+                textfont=dict(color="#aaa", size=11),
+            ))
+            fig_shap.update_layout(
+                plot_bgcolor="rgba(0,0,0,0)",
+                paper_bgcolor="rgba(0,0,0,0)",
+                height=300,
+                xaxis=dict(
+                    gridcolor="#1e1e1e", zeroline=True,
+                    zerolinecolor="#333", zerolinewidth=1,
+                    title="SHAP value (impact on podium probability)",
+                    tickfont=dict(color="#666"),
+                ),
+                yaxis=dict(tickfont=dict(color="#aaa")),
+                font=dict(color="#888"),
+                margin=dict(l=120),
+            )
+            st.plotly_chart(fig_shap, use_container_width=True)
+
+            # Plain language explanation
+            pos = factors[factors["shap_value"] > 0]
+            neg = factors[factors["shap_value"] < 0]
+            pos_str = ", ".join([f"**{r['feature']}** (+{r['shap_value']:.3f})"
+                                  for _, r in pos.head(3).iterrows()])
+            neg_str = ", ".join([f"**{r['feature']}** ({r['shap_value']:.3f})"
+                                  for _, r in neg.head(2).iterrows()])
+            st.markdown(f"""
+            <div style="background:#111;border:1px solid #1e1e1e;
+                        border-radius:10px;padding:1rem 1.2rem;margin-top:0.5rem;">
+                <div style="color:#fff;font-size:0.85rem;font-weight:600;margin-bottom:6px;">
+                    {explain_driver} — model reasoning
+                </div>
+                <div style="color:#aaa;font-size:0.82rem;line-height:1.6;">
+                    {'Helped by: ' + pos_str if pos_str else ''}
+                    {'<br>Hurt by: ' + neg_str if neg_str else ''}
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+        except Exception as e:
+            st.info(f"SHAP analysis unavailable: {e}")
 
 
 # ── Page: Season Championship ─────────────────────────────────────────────────
@@ -836,6 +911,139 @@ elif page == "Season Championship":
         st.dataframe(results, use_container_width=True, hide_index=True)
         section_header("Constructors Championship", color="#00d4aa")
         st.dataframe(constructors, use_container_width=True, hide_index=True)
+
+# ── Page: Driver DNA ──────────────────────────────────────────────────────────
+elif page == "Driver DNA":
+    st.markdown('<div class="main-header">Driver DNA</div>', unsafe_allow_html=True)
+    st.markdown('<div class="sub-header">Circuit fingerprints · Strengths & weaknesses per driver</div>', unsafe_allow_html=True)
+
+    st.markdown("""
+    <div style="background:#111;border:1px solid #1e1e1e;border-left:3px solid #7c4dff;
+                border-radius:10px;padding:1rem 1.2rem;margin:1rem 0;">
+        <div style="color:#7c4dff;font-size:0.7rem;text-transform:uppercase;
+                    letter-spacing:1px;margin-bottom:4px;">How it works</div>
+        <div style="color:#aaa;font-size:0.85rem;">
+            Each driver gets a fingerprint across 6 dimensions — performance at street circuits,
+            power tracks, technical circuits, high-downforce venues, consistency, and race craft
+            (positions gained from grid). Built from historical race data.
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    with st.spinner("Building driver DNA profiles from historical data..."):
+        hist = get_historical_results(2022, 2024)
+        dna  = build_driver_dna(hist)
+
+    DIMENSIONS = ["street","power","technical","high_downforce","consistency","race_craft"]
+    DIM_LABELS  = ["Street","Power","Technical","High\nDownforce","Consistency","Race\nCraft"]
+
+    # Driver comparison selector
+    section_header("Compare Drivers", color="#7c4dff")
+    available = dna["driver"].tolist()
+    defaults  = [d for d in ["VER","NOR","LEC","RUS","HAM"] if d in available][:5]
+    selected  = st.multiselect("Select drivers to compare", available, default=defaults)
+
+    if selected:
+        # Radar chart
+        fig = go.Figure()
+        colors = ["#e10600","#00d4aa","#7c4dff","#ff8c00","#00b0ff",
+                  "#ff4081","#69f0ae","#ffeb3b","#40c4ff","#ff6d00"]
+
+        for i, driver in enumerate(selected):
+            row    = dna[dna["driver"] == driver]
+            if row.empty:
+                continue
+            values = [float(row[d].iloc[0]) for d in DIMENSIONS]
+            values.append(values[0])  # close the polygon
+
+            fig.add_trace(go.Scatterpolar(
+                r=values,
+                theta=DIM_LABELS + [DIM_LABELS[0]],
+                fill="toself",
+                fillcolor=colors[i % len(colors)],
+                opacity=0.15,
+                line=dict(color=colors[i % len(colors)], width=2),
+                name=driver,
+            ))
+
+        fig.update_layout(
+            polar=dict(
+                bgcolor="rgba(0,0,0,0)",
+                radialaxis=dict(
+                    visible=True, range=[0,100],
+                    gridcolor="#1e1e1e", linecolor="#1e1e1e",
+                    tickfont=dict(color="#555", size=9),
+                    tickvals=[25,50,75,100],
+                ),
+                angularaxis=dict(
+                    gridcolor="#1e1e1e", linecolor="#2a2a2a",
+                    tickfont=dict(color="#aaa", size=11),
+                ),
+            ),
+            showlegend=True,
+            legend=dict(font=dict(color="#aaa"), orientation="h",
+                        y=-0.15, x=0.5, xanchor="center"),
+            paper_bgcolor="rgba(0,0,0,0)",
+            plot_bgcolor="rgba(0,0,0,0)",
+            height=520,
+            margin=dict(t=40, b=60),
+        )
+        st.plotly_chart(fig, use_container_width=True)
+
+        # Individual scorecards
+        section_header("Driver Scorecards", color="#7c4dff")
+        cols = st.columns(len(selected))
+        dim_icons = {"street":"🏙️","power":"⚡","technical":"🔧",
+                     "high_downforce":"🌀","consistency":"📊","race_craft":"🎯"}
+
+        for i, driver in enumerate(selected):
+            row = dna[dna["driver"] == driver]
+            if row.empty:
+                continue
+            with cols[i]:
+                best_dim = max(DIMENSIONS, key=lambda d: float(row[d].iloc[0]))
+                worst_dim = min(DIMENSIONS, key=lambda d: float(row[d].iloc[0]))
+                st.markdown(f"""
+                <div style="background:#111;border:1px solid #1e1e1e;
+                            border-top:3px solid {colors[i % len(colors)]};
+                            border-radius:10px;padding:12px 14px;">
+                    <div style="font-size:1rem;font-weight:800;color:#fff;
+                                margin-bottom:10px;">{driver}</div>
+                    {"".join([f'''
+                    <div style="display:flex;justify-content:space-between;
+                                align-items:center;margin-bottom:6px;">
+                        <span style="color:#666;font-size:0.72rem;">
+                            {dim_icons.get(d,"")}&nbsp;{d.replace("_"," ").title()}
+                        </span>
+                        <div style="display:flex;align-items:center;gap:6px;">
+                            <div style="width:60px;height:4px;background:#1e1e1e;border-radius:2px;">
+                                <div style="width:{float(row[d].iloc[0])}%;height:100%;
+                                            background:{colors[i % len(colors)]};
+                                            border-radius:2px;opacity:0.8;"></div>
+                            </div>
+                            <span style="color:#aaa;font-size:0.72rem;min-width:28px;
+                                         text-align:right;">{float(row[d].iloc[0]):.0f}</span>
+                        </div>
+                    </div>
+                    ''' for d in DIMENSIONS])}
+                    <div style="margin-top:10px;padding-top:8px;border-top:1px solid #1e1e1e;">
+                        <div style="color:#555;font-size:0.65rem;text-transform:uppercase;
+                                    letter-spacing:1px;margin-bottom:4px;">Strengths</div>
+                        <div style="color:#00d4aa;font-size:0.78rem;font-weight:600;">
+                            ↑ {best_dim.replace("_"," ").title()}
+                        </div>
+                        <div style="color:#e10600;font-size:0.78rem;font-weight:600;margin-top:2px;">
+                            ↓ {worst_dim.replace("_"," ").title()}
+                        </div>
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
+
+    # Full DNA table
+    section_header("All Drivers", color="#555")
+    display_dna = dna[["driver"] + DIMENSIONS].copy()
+    display_dna.columns = ["Driver","Street","Power","Technical","High Downforce","Consistency","Race Craft"]
+    st.dataframe(display_dna, use_container_width=True, hide_index=True)
 
 
 # ── Page: AI Race Engineer ────────────────────────────────────────────────────

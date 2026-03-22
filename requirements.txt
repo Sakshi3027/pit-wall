@@ -13,3 +13,4 @@ python-dotenv
 httpx
 pytest
 google-generativeai
+shap
