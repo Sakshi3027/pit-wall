@@ -28,6 +28,17 @@
 ![AI Race Engineer](screenshots/05_ai_engineer.png)
 *Gemini 2.0 Flash chatbot with live 2026 F1 context*
 
+### Driver DNA — Circuit Fingerprints
+![Driver DNA Radar](screenshots/06_driver_dna.png)
+*Radar chart comparing driver strengths across 6 dimensions*
+
+### Driver Scorecards
+![Driver Scorecards](screenshots/08_driver_scorecards.png)
+*Individual driver scorecards with mini progress bars per circuit type*
+
+### SHAP Explainability
+![SHAP Analysis](screenshots/07_shap_explainability.png)
+*Model reasoning — which features drove each podium prediction*
 ---
 
 ## What is Pit Wall?
@@ -69,6 +80,17 @@ The app updates automatically as the 2026 season progresses — standings, race 
 - Loaded with live 2026 standings as context
 - Ask anything: strategy calls, driver comparisons, championship analysis
 - Suggested questions + free-form chat interface
+
+### Driver DNA
+- Radar chart comparing drivers across 6 dimensions
+- Street, Power, Technical, High Downforce, Consistency, Race Craft
+- Individual scorecards with strength/weakness profile
+- Built from 2022-2024 historical race data
+
+### SHAP Explainability
+- Explains exactly why the model predicted each driver's podium probability
+- Shows top positive and negative factors per driver
+- Plain language reasoning card — "Helped by constructor pace, grid position"
 
 ---
 
