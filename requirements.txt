@@ -12,3 +12,4 @@ anthropic
 python-dotenv
 httpx
 pytest
+google-generativeai
