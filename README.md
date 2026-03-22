@@ -1,8 +1,32 @@
-# 🏎️ Pit Wall — F1 Intelligence Platform
+# 🏎️ Pit Wall - F1 Intelligence Platform
 
 > A full-stack AI-powered Formula 1 intelligence platform with live 2026 season data, ML race predictions, Monte Carlo championship simulation, and an AI Race Engineer chatbot.
 
-🔴 **[Live Demo → f1-pitwall-by-sakshi.streamlit.app](https://f1-pitwall-by-sakshi.streamlit.app)**
+**[Live Demo → f1-pitwall-by-sakshi.streamlit.app](https://f1-pitwall-by-sakshi.streamlit.app)**
+
+---
+
+## Screenshots
+
+### Live Championship Standings
+![Live Standings](screenshots/01_standings.png)
+*Real-time 2026 F1 championship — George Russell leads Antonelli after Round 2*
+
+### Race Analysis
+![Race Analysis](screenshots/02_race_analysis.png)
+*Lap time evolution & tire strategy visualisation powered by FastF1*
+
+### Race Predictor
+![Race Predictor](screenshots/03_race_predictor.png)
+*XGBoost model predicting podium probabilities — 90.7% accuracy*
+
+### Season Championship Forecast
+![Championship Forecast](screenshots/04_championship.png)
+*Monte Carlo simulation — 10,000 season scenarios, RUS predicted 2026 champion*
+
+### AI Race Engineer
+![AI Race Engineer](screenshots/05_ai_engineer.png)
+*Gemini 2.0 Flash chatbot with live 2026 F1 context*
 
 ---
 
@@ -16,31 +40,31 @@ The app updates automatically as the 2026 season progresses — standings, race 
 
 ## Features
 
-### 🏁 Live Championship Standings
+### Live Championship Standings
 - Real-time 2026 F1 driver & constructor standings
 - Hero dashboard showing P1/P2/P3 with points gaps
 - Full season schedule with race dates and circuits
 - Works for 2022–2026 seasons
 
-### 📊 Race Analysis
+### Race Analysis
 - Lap time evolution charts for any race session
 - Tire strategy visualisation (compound per driver per lap)
 - Fastest lap stats and race results
 - Powered by FastF1 API with local caching
 
-### 🤖 Race Predictor (ML)
+### Race Predictor (ML)
 - XGBoost model trained on 2022–2024 season data
 - Predicts podium probability per driver
 - Features: grid position, rolling form, circuit type, constructor pace, DNF rate
 - **90.7% accuracy** on held-out test data
 
-### 🎲 Season Championship Forecast
+### Season Championship Forecast
 - Monte Carlo simulation — 10,000 season scenarios
 - Predicts WDC & WCC winner probabilities based on current standings
 - Adjustable upset factor to model chaos/reliability
 - Current vs projected final points comparison
 
-### 💬 AI Race Engineer
+### AI Race Engineer
 - Powered by Google Gemini 2.0 Flash
 - Loaded with live 2026 standings as context
 - Ask anything: strategy calls, driver comparisons, championship analysis
@@ -83,19 +107,20 @@ The app updates automatically as the 2026 season progresses — standings, race 
 pit-wall/
 ├── app/
 │   ├── data/
-│   │   ├── fastf1_client.py      # FastF1 telemetry & lap data
-│   │   └── ergast_client.py      # Standings & schedule (Jolpica API)
+│   │   ├── fastf1_client.py       # FastF1 telemetry & lap data
+│   │   └── ergast_client.py       # Standings & schedule (Jolpica API)
 │   ├── models/
 │   │   ├── feature_engineering.py # ML feature pipeline
 │   │   ├── race_predictor.py      # XGBoost podium model
 │   │   └── season_simulator.py    # Monte Carlo simulator
 ├── frontend/
-│   └── app.py                    # Unified Streamlit app (5 pages)
+│   └── app.py                     # Unified Streamlit app (5 pages)
+├── screenshots/                   # App screenshots
 ├── tests/
 │   ├── test_data_clients.py
 │   ├── test_fastf1_client.py
 │   └── test_models.py
-├── data/cache/                   # FastF1 local cache
+├── data/cache/                    # FastF1 local cache
 └── requirements.txt
 ```
 
