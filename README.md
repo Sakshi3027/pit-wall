@@ -39,6 +39,10 @@
 ### SHAP Explainability
 ![SHAP Analysis](screenshots/07_shap_explainability.png)
 *Model reasoning which features drove each podium prediction*
+
+### AI Race Engineer Live Response
+![AI Race Engineer](screenshots/09_ai_race_engineer_live.png)
+*Llama 3.3 70B answering championship questions with real live 2026 standings*
 ---
 
 ## What is Pit Wall?
