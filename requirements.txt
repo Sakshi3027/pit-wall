@@ -15,3 +15,5 @@ pytest
 google-generativeai
 shap
 shap
+google-genai
+groq

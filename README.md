@@ -10,7 +10,7 @@
 
 ### Live Championship Standings
 ![Live Standings](screenshots/01_standings.png)
-*Real-time 2026 F1 championship — George Russell leads Antonelli after Round 2*
+*Real-time 2026 F1 championship, George Russell leads Antonelli after Round 2*
 
 ### Race Analysis
 ![Race Analysis](screenshots/02_race_analysis.png)
@@ -18,11 +18,11 @@
 
 ### Race Predictor
 ![Race Predictor](screenshots/03_race_predictor.png)
-*XGBoost model predicting podium probabilities — 90.7% accuracy*
+*XGBoost model predicting podium probabilities 90.7% accuracy*
 
 ### Season Championship Forecast
 ![Championship Forecast](screenshots/04_championship.png)
-*Monte Carlo simulation — 10,000 season scenarios, RUS predicted 2026 champion*
+*Monte Carlo simulation 10,000 season scenarios, RUS predicted 2026 champion*
 
 ### AI Race Engineer
 ![AI Race Engineer](screenshots/05_ai_engineer.png)
@@ -38,14 +38,14 @@
 
 ### SHAP Explainability
 ![SHAP Analysis](screenshots/07_shap_explainability.png)
-*Model reasoning — which features drove each podium prediction*
+*Model reasoning which features drove each podium prediction*
 ---
 
 ## What is Pit Wall?
 
 Pit Wall is a personal F1 data science project that goes beyond typical portfolio dashboards. It ingests **live 2026 F1 season data**, runs real ML models, and lets you talk to an AI that knows the current championship standings. Built entirely in Python, deployed on Streamlit Cloud.
 
-The app updates automatically as the 2026 season progresses — standings, race results, and championship predictions all reflect real data.
+The app updates automatically as the 2026 season progresses : standings, race results, and championship predictions all reflect real data.
 
 ---
 
@@ -70,7 +70,7 @@ The app updates automatically as the 2026 season progresses — standings, race 
 - **90.7% accuracy** on held-out test data
 
 ### Season Championship Forecast
-- Monte Carlo simulation — 10,000 season scenarios
+- Monte Carlo simulation 10,000 season scenarios
 - Predicts WDC & WCC winner probabilities based on current standings
 - Adjustable upset factor to model chaos/reliability
 - Current vs projected final points comparison

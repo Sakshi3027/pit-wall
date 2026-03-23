@@ -4,12 +4,11 @@ import plotly.express as px
 import plotly.graph_objects as go
 import sys, os
 from dotenv import load_dotenv
-import google.generativeai.types as genai_types
 
 load_dotenv()
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-import google.generativeai as genai
+from groq import Groq
 from app.data.ergast_client import (
     get_driver_standings, get_constructor_standings,
     get_season_schedule, get_historical_results
@@ -20,9 +19,8 @@ from app.models.season_simulator import simulate_season, build_driver_strengths
 from app.models.driver_dna import build_driver_dna
 from app.models.explainability import get_shap_explanation, get_top_factors
 
-GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
-if GEMINI_API_KEY:
-    genai.configure(api_key=GEMINI_API_KEY)
+GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "")
+groq_client = Groq(api_key=GROQ_API_KEY) if GROQ_API_KEY else None
 
 st.set_page_config(
     page_title="Pit Wall — F1 Intelligence",
@@ -53,7 +51,6 @@ st.markdown("""
     font-size: 0.75rem; color: #555; margin-top: 4px;
     letter-spacing: 2px; text-transform: uppercase; font-weight: 500;
 }
-
 .hero-card {
     background: linear-gradient(135deg, #140000 0%, #1a0a0a 60%, #161616 100%);
     border: 1px solid #2a1010; border-left: 4px solid #e10600;
@@ -78,7 +75,6 @@ st.markdown("""
     animation: blink 1.2s ease-in-out infinite;
 }
 @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.2} }
-
 .stat-grid {
     display: grid; grid-template-columns: repeat(3, 1fr);
     gap: 12px; margin: 1rem 0 1.5rem;
@@ -103,7 +99,6 @@ st.markdown("""
 }
 .stat-value { color: #fff; font-size: 1.6rem; font-weight: 800; line-height: 1; }
 .stat-sub { color: #666; font-size: 0.78rem; margin-top: 6px; }
-
 .section-header {
     display: flex; align-items: center; gap: 10px;
     margin: 1.8rem 0 1rem;
@@ -115,40 +110,15 @@ st.markdown("""
     font-size: 0.85rem; font-weight: 700; color: #fff;
     text-transform: uppercase; letter-spacing: 1px;
 }
-
-.driver-card {
-    background: #111; border: 1px solid #1e1e1e; border-radius: 10px;
-    padding: 1rem 1.2rem; margin-bottom: 6px;
-    display: flex; align-items: center; gap: 12px;
-    transition: background 0.2s;
-}
-.driver-card:hover { background: #161616; }
-.pos-badge {
-    width: 28px; height: 28px; border-radius: 50%;
-    background: #1e1e1e; color: #888; font-size: 0.75rem;
-    font-weight: 700; display: flex; align-items: center;
-    justify-content: center; flex-shrink: 0;
-}
-.pos-badge.p1 { background: rgba(255,200,0,0.15); color: #ffc800; }
-.pos-badge.p2 { background: rgba(192,192,192,0.15); color: #c0c0c0; }
-.pos-badge.p3 { background: rgba(176,100,50,0.15); color: #cd7f32; }
-
 .engineer-card {
     background: linear-gradient(135deg, #0d0d0d, #111);
     border: 1px solid #1e1e1e; border-left: 3px solid #e10600;
     border-radius: 12px; padding: 1.2rem 1.5rem; margin-bottom: 1rem;
 }
-
 [data-testid="stDataFrame"] {
     border: 1px solid #1e1e1e !important;
     border-radius: 12px !important; overflow: hidden;
 }
-[data-testid="stDataFrame"] th {
-    background: #111 !important; color: #888 !important;
-    font-size: 0.7rem !important; text-transform: uppercase !important;
-    letter-spacing: 1px !important;
-}
-
 .stButton > button {
     background: linear-gradient(135deg, #e10600, #b80500) !important;
     color: white !important; border: none !important;
@@ -173,7 +143,6 @@ st.markdown("""
     background: #1a0a0a !important; transform: none !important;
     box-shadow: none !important;
 }
-
 [data-testid="stAlert"] { border-radius: 10px !important; border: none !important; }
 [data-testid="metric-container"] {
     background: #111 !important; border: 1px solid #1e1e1e !important;
@@ -184,7 +153,6 @@ st.markdown("""
     color: #666 !important; font-size: 0.7rem !important;
     text-transform: uppercase !important; letter-spacing: 1px !important;
 }
-
 [data-testid="stChatMessage"] {
     background: #111 !important; border: 1px solid #1e1e1e !important;
     border-radius: 12px !important; margin-bottom: 8px !important;
@@ -278,70 +246,30 @@ Be direct, expert, and insightful. Real analysis only — no waffle.
     except Exception as e:
         return f"You are an expert F1 Race Engineer. Use your F1 knowledge to answer questions. (Live data error: {e})"
 
-def get_gemini_response(context: str, messages: list) -> str:
-    if not GEMINI_API_KEY:
-        return "⚠️ GEMINI_API_KEY not set."
 
-    from app.utils.f1_tools import TOOL_DEFINITIONS, TOOL_FUNCTIONS
-    import google.generativeai.types as genai_types
+def get_groq_response(context: str, messages: list) -> str:
+    if not groq_client:
+        return "⚠️ GROQ_API_KEY not set. Add it to your .env file."
+    try:
+        conversation = [{"role": "system", "content": context}]
+        for msg in messages:
+            conversation.append({
+                "role": msg["role"],
+                "content": msg["content"]
+            })
+        response = groq_client.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=conversation,
+            max_tokens=1024,
+            temperature=0.7,
+        )
+        return response.choices[0].message.content
+    except Exception as e:
+        err = str(e).lower()
+        if "quota" in err or "429" in err or "rate" in err:
+            return "⚠️ Rate limit hit — wait a moment and try again."
+        return f"⚠️ Error: {str(e)}"
 
-    tools = [genai_types.Tool(
-        function_declarations=[
-            genai_types.FunctionDeclaration(
-                name=t["name"],
-                description=t["description"],
-                parameters=t["parameters"],
-            ) for t in TOOL_DEFINITIONS
-        ]
-    )]
-
-    model = genai.GenerativeModel(
-        model_name="gemini-2.0-flash",
-        system_instruction=context,
-        tools=tools,
-    )
-
-    history = []
-    for msg in messages[:-1]:
-        history.append({
-            "role": "user" if msg["role"] == "user" else "model",
-            "parts": [msg["content"]]
-        })
-
-    chat     = model.start_chat(history=history)
-    response = chat.send_message(messages[-1]["content"])
-
-    # Handle function calls
-    max_rounds = 3
-    for _ in range(max_rounds):
-        fn_calls = [p for p in response.parts if hasattr(p, "function_call") and p.function_call.name]
-        if not fn_calls:
-            break
-
-        # Execute all function calls
-        tool_results = []
-        for part in fn_calls:
-            fn   = part.function_call
-            name = fn.name
-            args = dict(fn.args) if fn.args else {}
-            try:
-                result = TOOL_FUNCTIONS[name](args)
-            except Exception as e:
-                result = f"Error calling {name}: {e}"
-            tool_results.append(
-                genai_types.Part(
-                    function_response=genai_types.FunctionResponse(
-                        name=name,
-                        response={"result": result}
-                    )
-                )
-            )
-
-        response = chat.send_message(tool_results)
-
-    # Extract text response
-    text_parts = [p.text for p in response.parts if hasattr(p, "text") and p.text]
-    return "\n".join(text_parts) if text_parts else "I couldn't generate a response."
 
 # ── Sidebar ───────────────────────────────────────────────────────────────────
 with st.sidebar:
@@ -393,14 +321,15 @@ with st.sidebar:
                     st.session_state["f1_context"] = build_f1_context(season_year)
                 st.session_state["messages"].append({"role": "user", "content": s})
                 try:
-                    reply = get_gemini_response(
+                    reply = get_groq_response(
                         st.session_state["f1_context"],
                         st.session_state["messages"],
                     )
                 except Exception as e:
-                    reply = f"⚠️ {'Quota hit — try tomorrow.' if 'quota' in str(e).lower() or '429' in str(e) else str(e)}"
+                    reply = f"⚠️ {str(e)}"
                 st.session_state["messages"].append({"role": "assistant", "content": reply})
                 st.rerun()
+
 
 # ── Page: Live Standings ──────────────────────────────────────────────────────
 if page == "Live Standings":
@@ -415,7 +344,6 @@ if page == "Live Standings":
     done  = races_completed(schedule)
     total = len(schedule)
 
-    # Hero card
     st.markdown(f"""
     <div class="hero-card">
         <div class="live-badge">
@@ -463,7 +391,6 @@ if page == "Live Standings":
     </div>
     """, unsafe_allow_html=True)
 
-    # Stat cards
     st.markdown(f"""
     <div class="stat-grid">
         <div class="stat-card red">
@@ -497,7 +424,7 @@ if page == "Live Standings":
             plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)",
             height=400, xaxis_title="Points", yaxis_title="",
             font=dict(color="#888"), legend=dict(font=dict(color="#888")),
-            xaxis=dict(gridcolor="#1e1e1e"), yaxis2=dict(gridcolor="#1e1e1e"),
+            xaxis=dict(gridcolor="#1e1e1e"),
         )
         fig.update_traces(textposition="outside", textfont=dict(color="#aaa", size=11))
         st.plotly_chart(fig, use_container_width=True)
@@ -513,8 +440,7 @@ if page == "Live Standings":
             yaxis={"categoryorder":"total ascending"},
             plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)",
             showlegend=False, height=400, xaxis_title="Points", yaxis_title="",
-            font=dict(color="#888"),
-            xaxis=dict(gridcolor="#1e1e1e"),
+            font=dict(color="#888"), xaxis=dict(gridcolor="#1e1e1e"),
         )
         fig2.update_traces(textposition="outside", textfont=dict(color="#aaa", size=11))
         st.plotly_chart(fig2, use_container_width=True)
@@ -747,7 +673,6 @@ elif page == "Race Predictor":
                 predictions["driver"].tolist(),
                 key="shap_driver"
             )
-
             shap_df = get_shap_explanation(model, pd.DataFrame(rows), FEATURES)
             factors = get_top_factors(shap_df, explain_driver, top_n=6)
 
@@ -756,32 +681,25 @@ elif page == "Race Predictor":
                 x=factors["shap_value"],
                 y=factors["feature"],
                 orientation="h",
-                marker_color=[
-                    "#00d4aa" if v > 0 else "#e10600"
-                    for v in factors["shap_value"]
-                ],
-                text=[f"+{v:.3f}" if v > 0 else f"{v:.3f}"
-                      for v in factors["shap_value"]],
+                marker_color=["#00d4aa" if v > 0 else "#e10600" for v in factors["shap_value"]],
+                text=[f"+{v:.3f}" if v > 0 else f"{v:.3f}" for v in factors["shap_value"]],
                 textposition="outside",
                 textfont=dict(color="#aaa", size=11),
             ))
             fig_shap.update_layout(
-                plot_bgcolor="rgba(0,0,0,0)",
-                paper_bgcolor="rgba(0,0,0,0)",
+                plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)",
                 height=320,
                 xaxis=dict(
-                    gridcolor="#1e1e1e",
-                    zeroline=True, zerolinecolor="#333", zerolinewidth=1,
+                    gridcolor="#1e1e1e", zeroline=True,
+                    zerolinecolor="#333", zerolinewidth=1,
                     title="Impact on podium probability",
                     tickfont=dict(color="#666"),
                 ),
                 yaxis=dict(tickfont=dict(color="#aaa")),
-                font=dict(color="#888"),
-                margin=dict(l=140, r=80),
+                font=dict(color="#888"), margin=dict(l=140, r=80),
             )
             st.plotly_chart(fig_shap, use_container_width=True)
 
-            # Plain language summary
             pos = factors[factors["shap_value"] > 0]
             neg = factors[factors["shap_value"] < 0]
             helped = ", ".join([f"{r['feature']} (+{r['shap_value']:.3f})" for _, r in pos.head(3).iterrows()])
@@ -800,11 +718,8 @@ elif page == "Race Predictor":
                 f"</div>",
                 unsafe_allow_html=True
             )
-
         except Exception as e:
             st.info(f"SHAP analysis unavailable: {e}")
-
-       
 
 
 # ── Page: Season Championship ─────────────────────────────────────────────────
@@ -865,9 +780,8 @@ elif page == "Season Championship":
             for _ in range(n_sims):
                 season_pts = base_pts.copy()
                 for __ in range(remaining):
-                    scores = {d: max(0, s + np.random.normal(0, noise))
-                              for d, s in strengths.items()}
-                    order = sorted(scores, key=scores.get, reverse=True)
+                    scores = {d: max(0, s + np.random.normal(0, noise)) for d, s in strengths.items()}
+                    order  = sorted(scores, key=scores.get, reverse=True)
                     for pos, d in enumerate(order, 1):
                         if d in season_pts:
                             season_pts[d] = season_pts.get(d,0) + POINTS.get(pos,0)
@@ -910,8 +824,7 @@ elif page == "Season Championship":
         top = results[results["wdc_probability"] > 0]
         fig = px.bar(
             top, x="driver", y="wdc_probability",
-            color="wdc_probability",
-            color_continuous_scale=["#1e1e1e","#e10600"],
+            color="wdc_probability", color_continuous_scale=["#1e1e1e","#e10600"],
             text=top["wdc_probability"].apply(lambda x: f"{x}%"),
         )
         fig.update_layout(
@@ -931,13 +844,11 @@ elif page == "Season Championship":
             fig2.add_trace(go.Bar(name="Current", x=results["driver"],
                                    y=results["current_points"], marker_color="#2a2a2a"))
             fig2.add_trace(go.Bar(name="Projected", x=results["driver"],
-                                   y=results["avg_final_points"], marker_color="#e10600",
-                                   opacity=0.85))
+                                   y=results["avg_final_points"], marker_color="#e10600", opacity=0.85))
             fig2.update_layout(
                 barmode="group", plot_bgcolor="rgba(0,0,0,0)",
                 paper_bgcolor="rgba(0,0,0,0)", height=350,
-                font=dict(color="#888"),
-                legend=dict(font=dict(color="#aaa"), orientation="h"),
+                font=dict(color="#888"), legend=dict(font=dict(color="#aaa"), orientation="h"),
                 xaxis=dict(gridcolor="#1e1e1e"), yaxis=dict(gridcolor="#1e1e1e"),
             )
             st.plotly_chart(fig2, use_container_width=True)
@@ -949,14 +860,11 @@ elif page == "Season Championship":
             gap_df["gap"] = leader_pts - gap_df["points"]
             fig3 = px.bar(
                 gap_df.head(10), x="driver", y="gap",
-                color="gap",
-                color_continuous_scale=["#e10600","#2a2a2a"],
-                text="gap",
+                color="gap", color_continuous_scale=["#e10600","#2a2a2a"], text="gap",
             )
             fig3.update_layout(
                 plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)",
-                height=350, coloraxis_showscale=False,
-                font=dict(color="#888"),
+                height=350, coloraxis_showscale=False, font=dict(color="#888"),
                 xaxis=dict(gridcolor="#1e1e1e"), yaxis=dict(gridcolor="#1e1e1e"),
                 yaxis_title="Points behind leader",
             )
@@ -967,6 +875,7 @@ elif page == "Season Championship":
         st.dataframe(results, use_container_width=True, hide_index=True)
         section_header("Constructors Championship", color="#00d4aa")
         st.dataframe(constructors, use_container_width=True, hide_index=True)
+
 
 # ── Page: Driver DNA ──────────────────────────────────────────────────────────
 elif page == "Driver DNA":
@@ -1003,7 +912,6 @@ elif page == "Driver DNA":
     selected  = st.multiselect("Select drivers to compare", available, default=defaults)
 
     if selected:
-        # Radar chart
         fig = go.Figure()
         for i, driver in enumerate(selected):
             row = dna[dna["driver"] == driver]
@@ -1012,43 +920,29 @@ elif page == "Driver DNA":
             values = [float(row[d].iloc[0]) for d in DIMENSIONS]
             values.append(values[0])
             fig.add_trace(go.Scatterpolar(
-                r=values,
-                theta=DIM_LABELS + [DIM_LABELS[0]],
-                fill="toself",
-                fillcolor=colors[i % len(colors)],
-                opacity=0.15,
-                line=dict(color=colors[i % len(colors)], width=2),
+                r=values, theta=DIM_LABELS + [DIM_LABELS[0]],
+                fill="toself", fillcolor=colors[i % len(colors)],
+                opacity=0.15, line=dict(color=colors[i % len(colors)], width=2),
                 name=driver,
             ))
-
         fig.update_layout(
             polar=dict(
                 bgcolor="rgba(0,0,0,0)",
-                radialaxis=dict(
-                    visible=True, range=[0,100],
-                    gridcolor="#1e1e1e", linecolor="#1e1e1e",
-                    tickfont=dict(color="#555", size=9),
-                    tickvals=[25,50,75,100],
-                ),
-                angularaxis=dict(
-                    gridcolor="#1e1e1e", linecolor="#2a2a2a",
-                    tickfont=dict(color="#aaa", size=11),
-                ),
+                radialaxis=dict(visible=True, range=[0,100], gridcolor="#1e1e1e",
+                                linecolor="#1e1e1e", tickfont=dict(color="#555", size=9),
+                                tickvals=[25,50,75,100]),
+                angularaxis=dict(gridcolor="#1e1e1e", linecolor="#2a2a2a",
+                                 tickfont=dict(color="#aaa", size=11)),
             ),
             showlegend=True,
-            legend=dict(font=dict(color="#aaa"), orientation="h",
-                        y=-0.15, x=0.5, xanchor="center"),
-            paper_bgcolor="rgba(0,0,0,0)",
-            plot_bgcolor="rgba(0,0,0,0)",
-            height=520,
-            margin=dict(t=40, b=60),
+            legend=dict(font=dict(color="#aaa"), orientation="h", y=-0.15, x=0.5, xanchor="center"),
+            paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+            height=520, margin=dict(t=40, b=60),
         )
         st.plotly_chart(fig, use_container_width=True)
 
-        # Individual scorecards — built per driver separately
         section_header("Driver Scorecards", color="#7c4dff")
         cols = st.columns(len(selected))
-
         for i, driver in enumerate(selected):
             row = dna[dna["driver"] == driver]
             if row.empty:
@@ -1057,49 +951,29 @@ elif page == "Driver DNA":
                 color     = colors[i % len(colors)]
                 best_dim  = max(DIMENSIONS, key=lambda d: float(row[d].iloc[0]))
                 worst_dim = min(DIMENSIONS, key=lambda d: float(row[d].iloc[0]))
-
-                # Build card HTML piece by piece
                 card = f'<div style="background:#111;border:1px solid #1e1e1e;border-top:3px solid {color};border-radius:10px;padding:12px 14px;">'
                 card += f'<div style="font-size:1rem;font-weight:800;color:#fff;margin-bottom:10px;">{driver}</div>'
-
                 for d in DIMENSIONS:
-                    val  = float(row[d].iloc[0])
-                    icon = dim_icons.get(d, "")
+                    val   = float(row[d].iloc[0])
+                    icon  = dim_icons.get(d, "")
                     label = d.replace("_", " ").title()
-                    card += f'''
-                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
-                        <span style="color:#666;font-size:0.72rem;">{icon} {label}</span>
-                        <div style="display:flex;align-items:center;gap:6px;">
-                            <div style="width:60px;height:4px;background:#1e1e1e;border-radius:2px;">
-                                <div style="width:{val}%;height:100%;background:{color};border-radius:2px;opacity:0.8;"></div>
-                            </div>
-                            <span style="color:#aaa;font-size:0.72rem;min-width:28px;text-align:right;">{val:.0f}</span>
-                        </div>
-                    </div>'''
-
-                card += f'''
-                    <div style="margin-top:10px;padding-top:8px;border-top:1px solid #1e1e1e;">
-                        <div style="color:#555;font-size:0.65rem;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">Profile</div>
-                        <div style="color:#00d4aa;font-size:0.78rem;font-weight:600;">↑ {best_dim.replace("_"," ").title()}</div>
-                        <div style="color:#e10600;font-size:0.78rem;font-weight:600;margin-top:2px;">↓ {worst_dim.replace("_"," ").title()}</div>
-                    </div>
-                </div>'''
-
+                    card += f'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;"><span style="color:#666;font-size:0.72rem;">{icon} {label}</span><div style="display:flex;align-items:center;gap:6px;"><div style="width:60px;height:4px;background:#1e1e1e;border-radius:2px;"><div style="width:{val}%;height:100%;background:{color};border-radius:2px;opacity:0.8;"></div></div><span style="color:#aaa;font-size:0.72rem;min-width:28px;text-align:right;">{val:.0f}</span></div></div>'
+                card += f'<div style="margin-top:10px;padding-top:8px;border-top:1px solid #1e1e1e;"><div style="color:#555;font-size:0.65rem;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">Profile</div><div style="color:#00d4aa;font-size:0.78rem;font-weight:600;">↑ {best_dim.replace("_"," ").title()}</div><div style="color:#e10600;font-size:0.78rem;font-weight:600;margin-top:2px;">↓ {worst_dim.replace("_"," ").title()}</div></div></div>'
                 st.markdown(card, unsafe_allow_html=True)
 
-    # Full DNA table
     section_header("All Drivers", color="#555")
     display_dna = dna[["driver"] + DIMENSIONS].copy()
     display_dna.columns = ["Driver","Street","Power","Technical","High Downforce","Consistency","Race Craft"]
     st.dataframe(display_dna, use_container_width=True, hide_index=True)
 
+
 # ── Page: AI Race Engineer ────────────────────────────────────────────────────
 elif page == "AI Race Engineer":
     st.markdown('<div class="main-header">AI Race Engineer</div>', unsafe_allow_html=True)
-    st.markdown('<div class="sub-header">Gemini 2.0 Flash · Live 2026 F1 data</div>', unsafe_allow_html=True)
+    st.markdown('<div class="sub-header">Powered by Llama 3.3 70B · Live 2026 F1 data</div>', unsafe_allow_html=True)
 
-    if not GEMINI_API_KEY:
-        st.error("GEMINI_API_KEY not set. Add it to .env then restart.")
+    if not GROQ_API_KEY:
+        st.error("GROQ_API_KEY not set. Add it to .env then restart.")
         st.stop()
 
     if "f1_context" not in st.session_state:
@@ -1112,7 +986,7 @@ elif page == "AI Race Engineer":
     if not st.session_state["messages"]:
         try:
             standings = get_driver_standings(2026)
-            gap = int(standings.iloc[0]["points"] - standings.iloc[1]["points"])
+            gap    = int(standings.iloc[0]["points"] - standings.iloc[1]["points"])
             leader = standings.iloc[0]['full_name']
             p2     = standings.iloc[1]['full_name']
         except:
@@ -1146,11 +1020,11 @@ elif page == "AI Race Engineer":
         with st.chat_message("assistant"):
             with st.spinner("Analysing..."):
                 try:
-                    reply = get_gemini_response(
+                    reply = get_groq_response(
                         st.session_state["f1_context"],
                         st.session_state["messages"],
                     )
                 except Exception as e:
-                    reply = f"⚠️ {'Quota hit — try tomorrow.' if 'quota' in str(e).lower() or '429' in str(e) else str(e)}"
+                    reply = f"⚠️ {str(e)}"
             st.markdown(reply)
             st.session_state["messages"].append({"role": "assistant", "content": reply})
