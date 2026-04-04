@@ -1,6 +1,6 @@
 # 🏎️ Pit Wall - F1 Intelligence Platform
 
-[![Medium](https://medium.com/@SakshiChavan/i-built-an-ai-powered-f1-intelligence-platform-in-one-day-heres-how-cf2f6b0a528)
+[![Medium](https://img.shields.io/badge/Medium-Read%20the%20Story-black?style=for-the-badge&logo=medium&logoColor=white)](https://medium.com/@SakshiChavan/i-built-an-ai-powered-f1-intelligence-platform-in-one-day-heres-how-cf2f6b0a5281)
 [![Streamlit App](https://img.shields.io/badge/Streamlit-Live%20Demo-FF4B4B?style=for-the-badge&logo=streamlit&logoColor=white)](https://f1-pitwall-by-sakshi.streamlit.app)
 [![Python](https://img.shields.io/badge/Python-3.11-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://python.org)
 [![XGBoost](https://img.shields.io/badge/XGBoost-96.4%25%20Accuracy-orange?style=for-the-badge)](https://xgboost.readthedocs.io)
