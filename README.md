@@ -1,9 +1,15 @@
 # 🏎️ Pit Wall - F1 Intelligence Platform
 
+[![Medium](https://medium.com/@SakshiChavan/i-built-an-ai-powered-f1-intelligence-platform-in-one-day-heres-how-cf2f6b0a528)
+[![Streamlit App](https://img.shields.io/badge/Streamlit-Live%20Demo-FF4B4B?style=for-the-badge&logo=streamlit&logoColor=white)](https://f1-pitwall-by-sakshi.streamlit.app)
+[![Python](https://img.shields.io/badge/Python-3.11-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://python.org)
+[![XGBoost](https://img.shields.io/badge/XGBoost-96.4%25%20Accuracy-orange?style=for-the-badge)](https://xgboost.readthedocs.io)
+
 > A full-stack AI-powered Formula 1 intelligence platform with live 2026 season data, ML race predictions, Monte Carlo championship simulation, and an AI Race Engineer chatbot.
 
 **[Live Demo → f1-pitwall-by-sakshi.streamlit.app](https://f1-pitwall-by-sakshi.streamlit.app)**
 
+**[Read the Medium Post → How I Built an AI-Powered F1 Intelligence Platform](https://medium.com/@SakshiChavan/i-built-an-ai-powered-f1-intelligence-platform-in-one-day-heres-how-cf2f6b0a5281)**
 ---
 
 ## Screenshots
